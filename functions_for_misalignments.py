@@ -1,21 +1,15 @@
 import numpy as np
-import math
-import h5py
 from collections import Counter
 from mpmath import *
-import itertools
-import re
 import pandas as pd
-import xpart as xp
 import xtrack as xt
-from scipy.stats import uniform, truncnorm, gamma
 from scipy.special import *
 import random
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 import pickle
-import xsuite_utilities as xutil
-from matplotlib.ticker import MaxNLocator
+import re
+from scipy.stats import uniform, truncnorm, gamma
 
 
 def ensure_list(value):
@@ -24,216 +18,6 @@ def ensure_list(value):
         return [value]
     # Return as-is if it's already a list or another iterable
     return value
-# def add_misalignment_error (line, element_familys, error_class='systimatic',is_girder=None, seeds=201,
-#                             shift_x=0,shift_y=0,shift_s=0,rot_s_rad=0, knob_name=None):
-#     '''
-#     loop over the element_familys entris and add erros
-#     for evry entry an error knob is generated 
-    
-#     element_familys: 'Dipole', 'Quadrupole', ... or 'sf.*', 'sd.*', ...
-#     error_class: 'systematic', 'random' (in 3sigma)
-#     seeds: seed number for each shift or rotation.
-#     '''
-#     #make a dictionary with the errors for BPM's, to be given to the orbit correction function
-#     if element_familys== 'bpm':
-
-#         tt = line.get_table(attr=True)
-
-#         misalignment_dict = {}
-#         BPMs=tt.rows[f"{element_familys}.*"].name
-#         n_bpm = len(BPMs)
-#         x1_array = np.zeros(n_bpm)
-#         y1_array = np.zeros(n_bpm)
-#         r1_array = np.zeros(n_bpm)
-#         for jj, BPM in enumerate(BPMs):
-#             match = re.search(rf"^{element_familys}_(.*)$", BPM)
-
-#             element_name = match.group(1)
-#             #the bpm: bpm_qd12f is placed at the s coordinate that match with qd12fa. qd12f is not present
-#             #and qd12fa, qd12fb, qd12f.0 are all present (different s)
-#             if element_name =='qd12f':
-#                 element_name = 'qd12fa'
-
-
-#             misalignment_dict[BPM] = {}
-
-#             #find the misalignment of the element the BPM is attached to 
-#             misalignments=tt.rows[element_name].cols['shift_x','shift_y','rot_s_rad']
-#             mean = 0
-#             std_dev = 1
-#             lower_bound = -2.5 # in sigma
-#             upper_bound = 2.5 # in sigma
-#             size=len(BPMs)
-#             seeds2 =[seeds, seeds+1,seeds+2, seeds+3]
-#             for ii, name in enumerate(['sx','sy','rs']):
-#                 if name == 'sx':
-#                     np.random.seed(seeds2[ii])
-#                     x1 = misalignments['shift_x'][0].item()
-#                     x1_array[jj]=x1
-#                     x2=shift_x*truncnorm.rvs(lower_bound, upper_bound, loc=mean, scale=std_dev,size=size)
-#                 elif name == 'sy':
-#                     np.random.seed(seeds2[ii])
-#                     y1 = misalignments['shift_y'][0].item()
-#                     y1_array[jj]=y1
-#                     y2=shift_y*truncnorm.rvs(lower_bound, upper_bound, loc=mean, scale=std_dev, size=size)
-# 		        #the rad_s_no_frame is not available for BPM's (xtrack/trajectory_correction line250)
-#                 elif name == 'rs':
-#                     np.random.seed(seeds2[ii])
-#                     el = line[element_name]
-#                     r1 = float(el.rot_s_rad_no_frame)
-#                     r1_array[jj]=r1
-#                     r2=rot_s_rad*truncnorm.rvs(lower_bound, upper_bound, loc=mean, scale=std_dev, size=size)
-#             if error_class == 'systematic':
-#                 x2 = np.full(shift_x, size)
-#                 y2 = np.full(shift_y, size)
-#                 r2 = np.full(rot_s_rad, size)        
-#         for jj, BPM in enumerate(BPMs):
-#                 #add the element misalignnamement and the random BPM beam based alignment error to obtain the total BPM position error
-#                 misalignment_dict[BPM]['shift_x']=float(x1_array[jj]+x2[jj])
-#                 misalignment_dict[BPM]['shift_y']=float(y1_array[jj]+y2[jj])
-#                 misalignment_dict[BPM]['rot_s_rad']=float(r1_array[jj]+r2[jj])
-#         return misalignment_dict
-
-
-#     else:
-#         #misalignments for dipoles, quadrupoles, sextupoles, girders
-#         tt = line.get_table(attr=True)
-#         tt_no_parent_elem = tt.rows[tt.parent_name==None]
-#         tt_no_marker_no_parent_elem = tt_no_parent_elem.rows[tt_no_parent_elem.element_type!='Marker']
-
-#         element_family_list = ensure_list(element_familys)
-#         elements_with_types = [(name, line.element_dict[name].__class__.__name__) for name in line.element_names]
-
-
-
-#         for ii,element_family in enumerate(element_family_list):
-#             #off switch to regulate the misalignments without calling the function
-#             if knob_name is None:
-#                 mis_switch_name = 'mis_'+element_family+'_'+error_class[:3]+'_'+str(seeds)
-#                 line[mis_switch_name] = 1
-#             elif np.size(knob_name)== np.size(element_familys):
-#                 mis_switch_name = knob_name[ii]
-#                 line[mis_switch_name] = 1
-#             else:
-#                 mis_switch_name = knob_name[0]
-#                 line[mis_switch_name] = 1
-
-
-#             ## in order to include the parent elements if the line has thin element
-#             parent_names = [item for item in tt.parent_name if item is not None]
-#             if len(parent_names)>0:
-#                 parent_types = [line[parent_names[ii]].__class__.__name__ for ii in range(len(parent_names))]
-#             else:
-#                 parent_types = []
-
-#             if element_family in np.unique(np.append(tt.element_type,parent_types)):
-#                 parent_type_names = [name for ii, name in enumerate(parent_names) if parent_types[ii] == element_family]
-#                 element_names = np.append(tt_no_marker_no_parent_elem.rows[tt_no_marker_no_parent_elem.element_type==element_family].name,parent_type_names)
-#             else:
-#                 parent_type_names = [name for name in parent_names if re.match(element_family, name)] 
-#                 element_names = np.append(tt_no_marker_no_parent_elem.rows[element_family].name,parent_type_names)
-
-#             size = len(element_names)
-
-#             if error_class == 'systematic':
-#                 shift_values_x = np.full(shift_x, size)
-#                 shift_values_y = np.full(shift_y, size)
-#                 shift_values_s = np.full(shift_s, size)
-#                 rot_values_s = np.full(rot_s_rad, size)
-#             elif error_class == 'random':
-#                 mean = 0
-#                 std_dev = 1
-#                 lower_bound = -2.5 # in sigma
-#                 upper_bound = 2.5 # in sigma
-#                 seeds2 =[seeds, seeds+1,seeds+2, seeds+3]
-
-#                 for ii, name in enumerate(['sx','sy','ss','rs']):
-#                     if name == 'sx':
-#                         np.random.seed(seeds2[ii])
-#                         shift_values_x = shift_x*truncnorm.rvs(lower_bound, upper_bound, loc=mean, scale=std_dev, size=size)
-#                     elif name == 'sy':
-#                         np.random.seed(seeds2[ii])
-#                         shift_values_y = shift_y*truncnorm.rvs(lower_bound, upper_bound, loc=mean, scale=std_dev, size=size)
-#                     elif name == 'ss':
-#                         np.random.seed(seeds2[ii])
-#                         shift_values_s = shift_s*truncnorm.rvs(lower_bound, upper_bound, loc=mean, scale=std_dev, size=size)
-#                     elif name == 'rs':
-#                         np.random.seed(seeds2[ii])
-#                         rot_values_s = rot_s_rad*truncnorm.rvs(lower_bound, upper_bound, loc=mean, scale=std_dev, size=size)
-
-#             if is_girder== None:
-#                 misalignment_dict={}
-#                 #for all other element types the misalignment is simply the value obtained
-#                 for ii, name in enumerate(element_names):
-#                     all_names = [name]
-#                     hcor_name = f'hcor_{name}'
-#                     vcor_name = f'vcor_{name}'
-#                     if hcor_name in line.element_names:
-#                         all_names.append(hcor_name)
-#                     if vcor_name in line.element_names:
-#                         all_names.append(vcor_name)                    
-#                     # if attach_orbit_correctors:
-#                     #     hcor_name = f'hcor_{name}'
-#                     #     vcor_name = f'vcor_{name}'
-#                     #     if hcor_name in line.element_names:
-#                     #         all_names.append(hcor_name)
-#                     #     if vcor_name in line.element_names:
-#                     #         all_names.append(vcor_name)
-
-#                     s=tt.rows[name].s
-#                     # if not any((smin <= s <= smax) for smin, smax in ir_ranges):
-#                     misalignment_dict[name]={}
-#                     misalignment_dict[name]['shift_x']=shift_values_x[ii]
-#                     misalignment_dict[name]['shift_y']=shift_values_y[ii]
-#                     misalignment_dict[name]['shift_s']=shift_values_s[ii]
-#                     misalignment_dict[name]['rot_s_rad_no_frame']=rot_values_s[ii]
-#                     for elem_name in all_names:
-#                         line[elem_name].shift_x = line.ref[mis_switch_name]*shift_values_x[ii]
-#                         line[elem_name].shift_y = line.ref[mis_switch_name]*shift_values_y[ii]
-#                         line[elem_name].shift_s = line.ref[mis_switch_name]*shift_values_s[ii]
-#                         if line[elem_name].rot_s_rad !=0:
-#                             line[elem_name].rot_s_rad_no_frame = line.ref[mis_switch_name]*rot_values_s[ii]
-#                         elif line[elem_name].rot_s_rad==0:
-#                             line[elem_name].rot_s_rad = 0.0 
-#                             line[elem_name].rot_s_rad_no_frame = line.ref[mis_switch_name]*rot_values_s[ii]
-
-
-#             if is_girder is not None:
-#                 misalignment_dict={}
-#                 #for girders the total element missalignment is the misalignment of the element plus the misalignment of the girder on which the element is placed
-#                 for ii, name in enumerate(element_names):
-#                     idx = line.element_names.index(name)
-#                     i_left = idx
-#                     #a girder contains a quadrupole and the nearest sextupole, unless there is a dipole imnbetween, in which case it only contains a quadrupole
-#                     while i_left >= 0 and elements_with_types[i_left][1] != "RBend":
-#                         i_left -= 1
-
-#                     # Scan right
-#                     i_right = idx
-
-#                     while i_right < len(elements_with_types) and elements_with_types[i_right][1] != "RBend":
-#                         i_right += 1
-
-#                     # all_of_them = [elements_with_types[i][0] for i in range(i_left + 1, i_right)]
-
-#                     all_of_them = [elements_with_types[i][0] 
-#                             for i in range(i_left + 1, i_right) 
-#                             if elements_with_types[i][1] not in ("Drift", "Marker", 'Multipole')]
-#                     for aa,el in enumerate(all_of_them):
-#                         s=tt.rows[el].s
-#                         # if not any((smin <= s <= smax) for smin, smax in ir_ranges):
-#                         misalignment_dict[el]={}
-#                         misalignment_dict[el]['shift_x']=shift_values_x[ii]
-#                         misalignment_dict[el]['shift_y']=shift_values_y[ii]
-#                         misalignment_dict[el]['shift_s']=shift_values_s[ii]
-#                         misalignment_dict[el]['rot_s_rad_no_frame']=rot_values_s[ii]
-#                         line[el].shift_x = line.ref[mis_switch_name]*line[el].shift_x+line.ref[mis_switch_name]*shift_values_x[ii]
-#                         line[el].shift_y = line.ref[mis_switch_name]*line[el].shift_y+line.ref[mis_switch_name]*shift_values_y[ii]
-#                         line[el].shift_s = line.ref[mis_switch_name]*line[el].shift_s+line.ref[mis_switch_name]*shift_values_s[ii]
-#                         line[el].rot_s_rad = 0.0
-#                         line[el].rot_s_rad_no_frame =line.ref[mis_switch_name]*line[el].rot_s_rad_no_frame+ line.ref[mis_switch_name]*rot_values_s[ii]
-#     return misalignment_dict
-
 
 def add_misalignment_error (line, parameters):
     """
@@ -276,16 +60,7 @@ def add_misalignment_error (line, parameters):
 
     knob_name = parameters.get('switch', None)
     is_girder = parameters.get('is_girder', None)
-    # element_familys, error_class='systimatic',is_girder=None, seeds=201,
-    #                 shift_x=0,shift_y=0,shift_s=0,rot_s_rad=0, knob_name=None)
-    '''
-    loop over the element_familys entris and add erros
-    for evry entry an error knob is generated 
-    
-    element_familys: 'Dipole', 'Quadrupole', ... or 'sf.*', 'sd.*', ...
-    error_class: 'systematic', 'random' (in 3sigma)
-    seeds: seed number for each shift or rotation.
-    '''
+
     #make a dictionary with the errors for BPM's, to be given to the orbit correction function
     if element_familys== 'bpm':
 
@@ -566,26 +341,6 @@ def add_markers(line, marker_placement, marker_name=None):
 
     return added_markers
 
-def off_switch(element_list, switch_rate):
-    ''' 
-    Given the list of elements affected it will remove elements randomly. Used for correctors and BPM's to see how stable the solution is.
-
-    element_list: list of elements to be treated. Accepts nested lists eg. [[family10, family11],[family20, family21]]
-    switch_rate: the rate at which the element will be removed, maximum value 1, minimum 0.
-
-    returns the lists in the order and format provided with the modifications.
-    '''
-    kept = []
-    removed = []
-
-    for e in element_list:
-        if random.random() < switch_rate:
-            removed.append(e)
-        else:
-            kept.append(e)
-
-    return kept, removed
-
 def add_steering_correctors(line, corrector_names, corrector_prefix,corrector_plane='hv'):
     '''
     Similar to add_optics_correctors. This function only returns dipole correctors, with an option to have them only in the x or y plane.
@@ -631,36 +386,6 @@ def add_steering_correctors(line, corrector_names, corrector_prefix,corrector_pl
             if vcor_name not in line.element_names:
                 line.insert_element(vcor_name, xt.Multipole(ksl=np.array([0])), at=f'{element}')
                 line[vcor_name].ksl = line.vars['ksl' + f'{element}']
-
-    return
-
-def sextupoles_strength_edit (line, family_name=all, error_strength=1):
-
-    tt = line.get_table(attr=True)
-
-    if family_name == 'all':
-        line.vars['k2n.weight_ir'] = error_strength
-        line.vars['k2n.weight_arc'] = error_strength
-
-    elif family_name == 'ir':
-        line.vars['k2n.weight_ir'] = error_strength
-
-    elif family_name == 'arc':
-        line.vars['k2n.weight_arc'] = error_strength
-
-
-    line.vars['k2n.weight'] = error_strength
-    tt_sext = tt.rows[tt.element_type=='Sextupole']
-    if family_name == 'all':
-        for ii in tt_sext.rows['SCRAB[LR].*|S[FD][MXY][12][LR].*|S[FD][12][AB].*|S[FD][1234][CIJDFM][LR].*'].name:
-            line.element_refs[ii].k2 = line.vars['k2n.weight_ir']*line.element_refs[ii].k2._expr
-    elif family_name == 'ir':
-        for ii in tt_sext.rows['SCRAB[LR].*|S[FD][MXY][12][LR].*'].name:
-            line.element_refs[ii].k2 = line.vars['k2n.weight_ir']*line.element_refs[ii].k2._expr
-
-    elif family_name == 'arc':
-        for ii in tt_sext.rows['S[FD][12][AB].*|S[FD][1234][CIJDFM][LR].*'].name:
-            line.element_refs[ii].k2 = line.vars['k2n.weight_arc']*line.element_refs[ii].k2._expr
 
     return
 
@@ -754,7 +479,7 @@ def optics_corrections(line, reference_twiss, observables,
     observation_points: Points at which the responce matrix was evaluated (BPMs)
     correctors: Correctors for provided observables. Quadrupoles for phase, beta and dx and skew quadrupoles for coupling and dy
     p_inverse: Pseudoinverse for responce matrix
-    Delta_mu: If true, the phase observables become the phase difference between consecutive BPMs
+    # Delta_mu: If true, the phase observables become the phase difference between consecutive BPMs
     weight: Incase the full solution cannot be applied, the weight defines what part is (eg. weight=0.7 is 70%)
     '''
     if radiation:
@@ -774,13 +499,6 @@ def optics_corrections(line, reference_twiss, observables,
                         'f1010_imag': twiss.rows['bpm.*']['f1010'].imag,
                         'dy': twiss.rows['bpm.*']['dy']}
 
-    elif Delta_mu:
-        phase_obs = ['mux', 'muy']
-        other_obs = [o for o in observables if o not in phase_obs]
-        ideal_values = {o: phase_change(reference_twiss, observation_points, o) for o in phase_obs}
-        measured_values = {o: phase_change(twiss, observation_points, o) for o in phase_obs}
-        ideal_values.update({o: reference_twiss.rows['bpm.*'][o] for o in other_obs})
-        measured_values.update({o: twiss.rows['bpm.*'][o] for o in other_obs})
     else:
         ideal_values = {o: reference_twiss.rows['bpm.*'][o] for o in observables}
         measured_values = {o: twiss.rows['bpm.*'][o] for o in observables}
@@ -873,52 +591,7 @@ def response_matrix(line,observables, obs_points, corr_elements, dk=1e-5,rdt=Non
 
     return response_array
 
-def extract_misalignments(line, name, only_nonzero=True):
-    '''
-    name: name of elements of interest within brackets, eg. for arc quadrupoles ['q[fd].*a.*'] and ['Quadrupole'] for all quadrupoles
-    only_nonzero: if True, includes only the elements with non zero misalignment values
-    '''
-    name=name[0]
-    misalignment_dict={}
-    tt = line.get_table(attr=True)
-    if name in ['Bend','RBend','Quadrupole','Sextupole']:
-        tt_name = tt.rows[tt.element_type==name]
-    else:
-        tt_name = tt.rows[name]
-    elements = tt_name.name.tolist()
-    for el_name in elements:
-        try:
-            el = line[el_name]  
-        except KeyError:
-            continue  
-
-        if hasattr(el, "shift_x") or hasattr(el, "shift_y") \
-        or hasattr(el, "shift_s") or hasattr(el, "rot_s_rad_no_frame"):
-
-            sx = float(el.shift_x)
-            sy = float(el.shift_y)
-            ss = float(el.shift_s)
-            rs = float(el.rot_s_rad_no_frame)
-            if only_nonzero==True:
-                if any([sx, sy, ss, rs]):  # only add if at least one is non-zero
-                    misalignment_dict[el_name] = {
-                        'shift_x': sx,
-                        'shift_y': sy,
-                        'rot_s_rad_no_frame': rs,
-                        'shift_s': ss
-                    }
-            else:
-                misalignment_dict[el_name] = {
-                    'shift_x': sx,
-                    'shift_y': sy,
-                    'rot_s_rad_no_frame': rs,
-                    'shift_s': ss
-                }
-        else:
-            continue
-    return misalignment_dict
-
-def phase_change(twiss, observable):
+def phase_advance_between_consecutive_BPMs(twiss, observable):
     '''
     Returns an array with the phase difference between consecutive BPMs.
     '''
@@ -958,8 +631,8 @@ def get_delta_vec(twiss, reference_twiss, observables, rdt=False,Delta_mu=False)
     elif Delta_mu:
         phase_obs = ['mux', 'muy']
         other_obs = [o for o in observables if o not in phase_obs]
-        ideal_values = {o: phase_change(reference_twiss, o) for o in phase_obs}
-        measured_values = {o: phase_change(twiss, o) for o in phase_obs}
+        ideal_values = {o: phase_advance_between_consecutive_BPMs(reference_twiss, o) for o in phase_obs}
+        measured_values = {o: phase_advance_between_consecutive_BPMs(twiss, o) for o in phase_obs}
         ideal_values.update({o: reference_twiss.rows['bpm.*'][o] for o in other_obs})
         measured_values.update({o: twiss.rows['bpm.*'][o] for o in other_obs})
     # if coupling_rdt:
@@ -972,13 +645,14 @@ def get_delta_vec(twiss, reference_twiss, observables, rdt=False,Delta_mu=False)
     delta_y_vec = np.concatenate([delta_y[o] for o in observables])
     return delta_y_vec
 
-def tikhonov_lcurve(M, b, lambdas=None, plot=True, title=None):
+def tikhonov_lcurve(M, b, min_slope_condition=20, lambdas=None, plot=True, title=None):
     """
     Computes the Tikhonov-regularized solution of a system using the L-curve method
     and automatically selects the optimal regularization parameter.
 
     M: response matrix.
     b: observable deviations
+    min_slope_condition: a minimum slope condition for the selection of the optimal lambda.
     lambdas: array of regularization parameters to scan (default: logspace from 1e-1 to 1e15).
     plot: if True, displays the L-curve and selected corner point.
     title: optional title for the plot.
@@ -1025,8 +699,9 @@ def tikhonov_lcurve(M, b, lambdas=None, plot=True, title=None):
 
     mask = np.zeros_like(curvature, dtype=bool)
 
-    # define what "large slope" means
-    slope_threshold = 20   # adjust if needed
+    #Applies a minimum slope threshold for the selected optimal lambda. Ensures the elbow
+    #point is selected. Value to be adjusted, depends on system optics.
+    slope_threshold = min_slope_condition   
 
     mask = np.zeros_like(curvature, dtype=bool)
 
@@ -1044,29 +719,106 @@ def tikhonov_lcurve(M, b, lambdas=None, plot=True, title=None):
 
     lambda_opt = lambdas[idx_corner]
     c_opt = solutions[idx_corner]
-
     if plot:
-        plt.figure(figsize=(6,5))
-        sc = plt.scatter(log_r, log_s, c=t, cmap='viridis', s=12)
-        plt.plot(log_r, log_s, '-k', lw=0.5)
-        plt.scatter(log_r[idx_corner], log_s[idx_corner],
-                    c='r', s=60, label=f'corner λ={lambda_opt:.3g}')
-        plt.colorbar(sc, label='log10(lambda)')
-        plt.xlabel('log10 ||M c - b||')
-        plt.ylabel('log10 ||c||')
-        if title:
-        	plt.title(f'L-curve (log-log) {title}')
-        else:
-        	plt.title('L-curve (log-log)')
-        plt.legend()
-        plt.grid(True)
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        sc = ax.scatter(log_r, log_s, c=t, cmap='viridis', s=30)
+        ax.plot(log_r, log_s, '-', color='black', linewidth=1)
+
+        exp = int(np.floor(np.log10(lambda_opt)))
+        mant = lambda_opt / 10**exp
+
+        label = rf'corner $\lambda = {mant:.2f}\times 10^{{{exp}}}$'
+        ax.scatter(log_r[idx_corner], log_s[idx_corner], c='red', s=100, label=label)
+        cbar = plt.colorbar(sc)
+        cbar.set_label(r'$\log_{10}(\lambda)$', fontsize=24)
+        cbar.ax.tick_params(labelsize=22)
+
+        ax.set_xlabel(r'$\log_{10} \| M c - b \|$', fontsize=24)
+        ax.set_ylabel(r'$\log_{10} \| c \|$', fontsize=24)
+
+        # if title:
+        #     ax.set_title(f'L-curve (log-log) {title}', fontsize=30)
+        # else:
+        #     ax.set_title('L-curve (log-log)', fontsize=30)
+
+        ax.tick_params(axis='both', which='major', labelsize=22)
+        ax.legend(fontsize=22, loc='best')
+        ax.grid()
+
+        fig.tight_layout()
         plt.show()
 
     return lambda_opt, c_opt
 
+def remove_element_from_list(element_list, switch_rate):
+    ''' 
+    Given the list of elements affected it will remove elements randomly. Used for correctors and BPM's to see how stable the solution is.
+
+    element_list: list of elements to be treated. Accepts nested lists eg. [[family10, family11],[family20, family21]]
+    switch_rate: the rate at which the element will be removed, maximum value 1, minimum 0.
+
+    returns the lists in the order and format provided with the modifications.
+    '''
+    kept = []
+    removed = []
+
+    for e in element_list:
+        if random.random() < switch_rate:
+            removed.append(e)
+        else:
+            kept.append(e)
+
+    return kept, removed
+
+def extract_misalignments(line, name, only_nonzero=True):
+    '''
+    name: name of elements of interest within brackets, eg. for arc quadrupoles ['q[fd].*a.*'] and ['Quadrupole'] for all quadrupoles
+    only_nonzero: if True, includes only the elements with non zero misalignment values
+    '''
+    name=name[0]
+    misalignment_dict={}
+    tt = line.get_table(attr=True)
+    if name in ['Bend','RBend','Quadrupole','Sextupole']:
+        tt_name = tt.rows[tt.element_type==name]
+    else:
+        tt_name = tt.rows[name]
+    elements = tt_name.name.tolist()
+    for el_name in elements:
+        try:
+            el = line[el_name]  
+        except KeyError:
+            continue  
+
+        if hasattr(el, "shift_x") or hasattr(el, "shift_y") \
+        or hasattr(el, "shift_s") or hasattr(el, "rot_s_rad_no_frame"):
+
+            sx = float(el.shift_x)
+            sy = float(el.shift_y)
+            ss = float(el.shift_s)
+            rs = float(el.rot_s_rad_no_frame)
+            if only_nonzero==True:
+                if any([sx, sy, ss, rs]):  # only add if at least one is non-zero
+                    misalignment_dict[el_name] = {
+                        'shift_x': sx,
+                        'shift_y': sy,
+                        'rot_s_rad_no_frame': rs,
+                        'shift_s': ss
+                    }
+            else:
+                misalignment_dict[el_name] = {
+                    'shift_x': sx,
+                    'shift_y': sy,
+                    'rot_s_rad_no_frame': rs,
+                    'shift_s': ss
+                }
+        else:
+            continue
+    return misalignment_dict
+
 
 #matching function from xsuite utilities adapted for chromaticity and tune correction for LCC_106.2.0
-def match_tune_chroma (line, target_twiss, match_quantities='tune_chroma', method='6d', machine='FCCee'):
+def match_tune_chroma (line, target_twiss, match_quantities='tune_chroma', method='6d'):
 
     if isinstance(target_twiss, dict):
         if 'tune' in match_quantities:
@@ -1315,7 +1067,7 @@ def closed_orbit_vs_s(reference_twiss, studied_twiss, outline=None, corr=False):
     orbit_div_x = studied_twiss.x-reference_twiss.x
     orbit_div_y = studied_twiss.y-reference_twiss.y
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10,6))
 
     if np.max(np.abs([orbit_div_x.max(), orbit_div_x.min()])) > np.max(np.abs([orbit_div_y.max(), orbit_div_y.min()])):
         ax.plot(studied_twiss.s, orbit_div_x, '-', color='crimson', label='x corrected' if corr else 'x', alpha=0.7)
@@ -1323,7 +1075,7 @@ def closed_orbit_vs_s(reference_twiss, studied_twiss, outline=None, corr=False):
 
         ip_names = reference_twiss.rows['ip.[1-8]$'].name
         for ii in ip_names:
-            plt.axvline(x = reference_twiss.rows[ii].s, linestyle = '--', color = 'black', linewidth=0.7)
+            plt.axvline(x = reference_twiss.rows[ii].s, linestyle = '--', color = 'black', linewidth=0.5)
             plt.text(reference_twiss.rows[ii].s, 0.8*ax.get_ylim()[1], ii, horizontalalignment='center', verticalalignment='center', bbox=dict(boxstyle='round', facecolor='wheat', alpha=1))
 
     else:
@@ -1335,21 +1087,27 @@ def closed_orbit_vs_s(reference_twiss, studied_twiss, outline=None, corr=False):
             plt.text(reference_twiss.rows[ii].s, 0.8*ax.get_ylim()[1], ii, horizontalalignment='center',
             verticalalignment='center', bbox=dict(boxstyle='round', facecolor='wheat', alpha=1))
 
-    ax.set_xlabel('s [m]', fontsize=18, fontweight='bold')
-    ax.set_ylabel(r'$\mathbf{x-x_{nom}~;~y-y_{nom}}$ [m]', fontsize=18, fontweight='bold')
-
-    # ax.set_yscale("log")
-
+    ax.set_xlabel(r'$s\,[\mathrm{m}]$', fontsize=24)
+    ax.set_ylabel(r'$(x - x_{nom};\; y - y_{nom})\,[\mathrm{m}]$', fontsize=24)
+    ip_names = reference_twiss.rows['ip.[1-8]$'].name
+    for ip in ip_names:
+        s_ip = studied_twiss.rows[ip].s
+        ax.axvline(x=s_ip, linestyle='--', color='black', linewidth=0.5)
+        ax.text(
+            s_ip, 0.8 * ax.get_ylim()[1], ip,
+            ha='center', va='center', fontsize=18,
+            bbox=dict(boxstyle='round', facecolor='wheat', alpha=1)
+        )
     ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True),)
     ax.yaxis.get_major_formatter().set_scientific(True)
     ax.yaxis.get_major_formatter().set_powerlimits((0, 0))
     ax.yaxis.offsetText.set_size(15)
 
-    ax.tick_params(axis='both', which='major', labelsize=18)  # Increase major ticks
+    ax.tick_params(axis='both', which='major', labelsize=22)  # Increase major ticks
 
     ax.legend(fontsize=18, loc='best')
     ax.grid()
-    plt.title(f'Closed Orbit Deviation Seed {135}', fontsize=22, fontweight='bold')
+    # plt.title(f'Closed Orbit Deviation, Seed {135}', fontsize=30)
 
     plt.tight_layout()
     if outline is not None:
@@ -1364,47 +1122,43 @@ def beta_beating_vs_s(reference_twiss, studied_twiss, zoom=1, outline=None):
     beta_beat_x = (studied_twiss.betx - reference_twiss.betx) / reference_twiss.betx
     beta_beat_y = (studied_twiss.bety - reference_twiss.bety) / reference_twiss.bety
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10,6))
 
     # Plot dominant plane first
     if np.max(np.abs([beta_beat_x.max(), beta_beat_x.min()])) > \
        np.max(np.abs([beta_beat_y.max(), beta_beat_y.min()])):
 
-        ax.plot(reference_twiss.s, beta_beat_x, '-', color='crimson', label='x', alpha=0.7)
-        ax.plot(reference_twiss.s, beta_beat_y, '-', color='y', label='y', alpha=0.7)
+        ax.plot(reference_twiss.s, beta_beat_x*100, '-', color='crimson', label='x', alpha=0.7)
+        ax.plot(reference_twiss.s, beta_beat_y*100, '-', color='y', label='y', alpha=0.7)
     else:
-        ax.plot(reference_twiss.s, beta_beat_y, '-', color='y', label='y', alpha=0.7)
-        ax.plot(reference_twiss.s, beta_beat_x, '-', color='crimson', label='x', alpha=0.7)
+        ax.plot(reference_twiss.s, beta_beat_y*100, '-', color='y', label='y', alpha=0.7)
+        ax.plot(reference_twiss.s, beta_beat_x*100, '-', color='crimson', label='x', alpha=0.7)
 
     # IP markers
     ip_names = reference_twiss.rows['ip.[1-8]$'].name
     for ip in ip_names:
-        s_ip = reference_twiss.rows[ip].s
+        s_ip = studied_twiss.rows[ip].s
         ax.axvline(x=s_ip, linestyle='--', color='black', linewidth=0.5)
         ax.text(
             s_ip, 0.8 * ax.get_ylim()[1], ip,
-            ha='center', va='center',
+            ha='center', va='center', fontsize=18,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=1)
         )
 
-    ax.set_xlabel('s [m]', fontsize=18, fontweight='bold')
+    ax.set_xlabel(r'$s\ [\mathrm{m}]$', fontsize=24)
     ax.set_ylabel(
-        r'$\mathbf{(\beta-\beta_{ref})/\beta_{ref}}$',
-        fontsize=18, fontweight='bold'
+        r'$(\beta - \beta_{ref}) / \beta_{ref}$ [%]',
+
+        fontsize=24
     )
 
-    # Scientific notation styling
-    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-    ax.yaxis.get_major_formatter().set_scientific(True)
-    ax.yaxis.get_major_formatter().set_powerlimits((0, 0))
-    ax.yaxis.offsetText.set_size(15)
     if zoom is not None:
         ax.set_ylim(-zoom,zoom)
 
-    ax.tick_params(axis='both', which='major', labelsize=18)
+    ax.tick_params(axis='both', which='major', labelsize=22)
     ax.legend(fontsize=18, loc='best')
     ax.grid()
-    plt.title(f'Beta Beating Seed {135}', fontsize=22, fontweight='bold')
+    # plt.title(f'Beta Beating, Seed {135}', fontsize=30)
     plt.tight_layout()
 
     if outline is not None:
@@ -1419,7 +1173,7 @@ def dispersion_deviation_vs_s(reference_twiss, studied_twiss, outline=None):
     disp_div_x = studied_twiss.dx - reference_twiss.dx
     disp_div_y = studied_twiss.dy - reference_twiss.dy
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10,6))
 
     # Plot dominant plane first
     if np.max(np.abs([disp_div_x.max(), disp_div_x.min()])) > \
@@ -1434,18 +1188,17 @@ def dispersion_deviation_vs_s(reference_twiss, studied_twiss, outline=None):
     # IP markers
     ip_names = reference_twiss.rows['ip.[1-8]$'].name
     for ip in ip_names:
-        s_ip = reference_twiss.rows[ip].s
+        s_ip = studied_twiss.rows[ip].s
         ax.axvline(x=s_ip, linestyle='--', color='black', linewidth=0.5)
         ax.text(
             s_ip, 0.8 * ax.get_ylim()[1], ip,
-            ha='center', va='center',
+            ha='center', va='center', fontsize=18,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=1)
         )
-
-    ax.set_xlabel('s [m]', fontsize=18, fontweight='bold')
+    ax.set_xlabel('s [m]', fontsize=24)
     ax.set_ylabel(
-        r'$\mathbf{D-D_{ref}}$ [m]',
-        fontsize=18, fontweight='bold'
+        r'$(D - D_{ref})$ [m]',
+        fontsize=24
     )
 
     # Scientific notation styling
@@ -1454,10 +1207,10 @@ def dispersion_deviation_vs_s(reference_twiss, studied_twiss, outline=None):
     ax.yaxis.get_major_formatter().set_powerlimits((0, 0))
     ax.yaxis.offsetText.set_size(15)
 
-    ax.tick_params(axis='both', which='major', labelsize=18)
+    ax.tick_params(axis='both', which='major', labelsize=22)
     ax.legend(fontsize=18, loc='best')
     ax.grid()
-    plt.title(f'Dispersion Deviation Seed {135}', fontsize=22, fontweight='bold')
+    # plt.title(f'Dispersion Deviation, Seed {135}', fontsize=30)
 
     plt.tight_layout()
 
@@ -1478,7 +1231,7 @@ def coupling_vs_s(studied_twiss, outline=None):
     coupling_re = studied_twiss.c_minus_re 
     coupling_im = studied_twiss.c_minus_im 
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10,6))
 
     # Plot dominant component first
     if np.max(np.abs([coupling_re.max(), coupling_re.min()])) > \
@@ -1496,12 +1249,14 @@ def coupling_vs_s(studied_twiss, outline=None):
 
     # IP markers
     ip_names = studied_twiss.rows['ip.[1-8]$'].name
+
+
     for ip in ip_names:
         s_ip = studied_twiss.rows[ip].s
         ax.axvline(x=s_ip, linestyle='--', color='black', linewidth=0.5)
         ax.text(
             s_ip, 0.8 * ax.get_ylim()[1], ip,
-            ha='center', va='center',
+            ha='center', va='center', fontsize=18,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=1)
         )
 
@@ -1533,7 +1288,7 @@ def coupling_vs_s(studied_twiss, outline=None):
 
 def coupling_rdt_single(twiss, outline=None):
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(10,6))
 
     s = twiss.s
 
@@ -1552,6 +1307,11 @@ def coupling_rdt_single(twiss, outline=None):
     bpm_rows = twiss.rows['bpm.*']
     bpm_s = bpm_rows.s
     ip_names = twiss.rows['ip.[1-8]$'].name
+    # Scientific notation styling
+    ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
+    ax.yaxis.get_major_formatter().set_scientific(True)
+    ax.yaxis.get_major_formatter().set_powerlimits((0, 0))
+    ax.yaxis.offsetText.set_size(15)
 
     for ip in ip_names:
         s_ip = twiss.rows[ip].s
@@ -1566,19 +1326,19 @@ def coupling_rdt_single(twiss, outline=None):
             0.8 * ax.get_ylim()[1],
             ip,
             ha='center',
-            va='center',
+            va='center', fontsize=18,
             bbox=dict(boxstyle='round', facecolor='wheat', alpha=1)
         )
 
     # labels
-    ax.set_xlabel('s [m]', fontsize=18, fontweight='bold')
-    ax.set_ylabel('Amplitude', fontsize=18, fontweight='bold')
+    ax.set_xlabel('s [m]', fontsize=24)
+    ax.set_ylabel('Amplitude', fontsize=24)
 
-    ax.tick_params(axis='both', labelsize=18)
-    ax.legend(fontsize='large', loc='best')
+    ax.tick_params(axis='both', labelsize=22)
+    ax.legend(fontsize=18, loc='best')
     ax.grid(True)
 
-    ax.set_title('Coupling RDTs Seed 135', fontsize=22, fontweight='bold')
+    # ax.set_title('Coupling RDTs, Seed 135', fontsize=30)
 
     plt.tight_layout()
 
@@ -1597,7 +1357,6 @@ def coupling_rdt_single(twiss, outline=None):
     }
 
     return rms
-
 
 #Plotting functions to study many seeds
 def beta_beating_vs_s_manyseed(reference_twiss, studied_twisses_dict,
@@ -2317,7 +2076,7 @@ def coupling_rdt(reference_twiss, studied_twisses_dict, outline=None, outlier_si
     ax_f1001.tick_params(axis='both', which='major', labelsize=24)
     ax_f1001.legend(fontsize=18, loc='lower left')
     ax_f1001.grid(True)
-    ax_f1001.set_title('Coupling RDT f1001', fontsize=30, fontweight='bold')
+    # ax_f1001.set_title('Coupling RDT f1001', fontsize=30, fontweight='bold')
 
     # f1010 plot
     ax_f1010.plot(s, stats['f1010_re'][0], '-',zorder=10, color='royalblue')
@@ -2332,7 +2091,7 @@ def coupling_rdt(reference_twiss, studied_twisses_dict, outline=None, outlier_si
     ax_f1010.tick_params(axis='both', which='major', labelsize=24)
     ax_f1010.legend(fontsize=18, loc='lower left')
     ax_f1010.grid(True)
-    ax_f1010.set_title('Coupling RDT f1010', fontsize=30, fontweight='bold')
+    # ax_f1010.set_title('Coupling RDT f1010', fontsize=30, fontweight='bold')
     ip_names = reference_twiss.rows['ip.[1-8]$'].name
 
     for ip in ip_names:
